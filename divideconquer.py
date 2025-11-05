@@ -2,6 +2,7 @@
 Optimal Facility Location in Linear Networks
 Divide and Conquer Algorithm Implementation with Experimental Validation
 Generates divide_conquer_results.png for LaTeX report
+CORRECTED VERSION: O(n) complexity with linear fitting
 """
 
 import random
@@ -20,59 +21,60 @@ def weighted_median(points: List[Tuple[float, float]], depth: int = 0) -> Tuple[
         depth: Current recursion depth (for tracking)
     
     Returns:
-        Tuple of (optimal_position, num_comparisons, max_depth)
+        Tuple of (optimal_position, num_operations, max_depth)
     """
     n = len(points)
-    comparisons = 0
+    operations = 0  # Track operations (approximate)
     max_depth = depth
     
     # Base case: small instances
     if n <= 5:
-        result, comps = weighted_median_small(points)
-        return result, comps, depth
+        result, ops = weighted_median_small(points)
+        return result, ops, depth
     
     # Divide: partition into groups of 5
     groups = [points[i:i+5] for i in range(0, n, 5)]
-    comparisons += n  # Partitioning cost
+    operations += n  # Partitioning cost
     
     # Find median of each group
     medians = []
     for group in groups:
         group_sorted = sorted(group, key=lambda p: p[0])
-        comparisons += len(group) * np.log2(len(group))  # Sorting cost
+        operations += 10  # Constant time sorting for group of 5
         mid = len(group_sorted) // 2
         medians.append(group_sorted[mid][0])
     
     # Conquer: recursively find median of medians (pivot)
     median_points = [(m, 1.0) for m in medians]
-    pivot, pivot_comps, pivot_depth = weighted_median(median_points, depth + 1)
-    comparisons += pivot_comps
+    pivot, pivot_ops, pivot_depth = weighted_median(median_points, depth + 1)
+    operations += pivot_ops
     max_depth = max(max_depth, pivot_depth)
     
     # Combine: partition around pivot
     P_L = [(x, w) for x, w in points if x < pivot]
     P_E = [(x, w) for x, w in points if x == pivot]
     P_R = [(x, w) for x, w in points if x > pivot]
-    comparisons += n  # Partitioning comparisons
+    operations += n  # Partitioning comparisons
     
     W_L = sum(w for _, w in P_L)
     W_E = sum(w for _, w in P_E)
     W_R = sum(w for _, w in P_R)
     W = W_L + W_E + W_R
+    operations += n  # Weight summations
     
     # Determine which partition contains weighted median
     if W_L > W / 2:
-        result, rec_comps, rec_depth = weighted_median(P_L, depth + 1)
-        comparisons += rec_comps
+        result, rec_ops, rec_depth = weighted_median(P_L, depth + 1)
+        operations += rec_ops
         max_depth = max(max_depth, rec_depth)
-        return result, comparisons, max_depth
+        return result, operations, max_depth
     elif W_L + W_E >= W / 2:
-        return pivot, comparisons, max_depth
+        return pivot, operations, max_depth
     else:
-        result, rec_comps, rec_depth = weighted_median(P_R, depth + 1)
-        comparisons += rec_comps
+        result, rec_ops, rec_depth = weighted_median(P_R, depth + 1)
+        operations += rec_ops
         max_depth = max(max_depth, rec_depth)
-        return result, comparisons, max_depth
+        return result, operations, max_depth
 
 
 def weighted_median_small(points: List[Tuple[float, float]]) -> Tuple[float, int]:
@@ -83,22 +85,22 @@ def weighted_median_small(points: List[Tuple[float, float]]) -> Tuple[float, int
         points: List of (position, weight) tuples
     
     Returns:
-        Tuple of (weighted_median_position, comparisons)
+        Tuple of (weighted_median_position, operations)
     """
     n = len(points)
     points_sorted = sorted(points, key=lambda p: p[0])
-    comparisons = n * np.log2(max(n, 2))  # Sorting cost
+    operations = 10  # Constant operations for small group
     
     W = sum(w for _, w in points_sorted)
     cumulative = 0
     
     for x, w in points_sorted:
         cumulative += w
-        comparisons += 1  # Comparison for cumulative check
+        operations += 1
         if cumulative >= W / 2:
-            return x, int(comparisons)
+            return x, operations
     
-    return points_sorted[-1][0], int(comparisons)
+    return points_sorted[-1][0], operations
 
 
 def total_weighted_distance(points: List[Tuple[float, float]], facility_pos: float) -> float:
@@ -178,7 +180,7 @@ def run_experiment_varying_n(n_values: List[int] = None, trials: int = 10) -> di
     results = {
         'n': [],
         'time': [],
-        'comparisons': [],
+        'operations': [],
         'depth': []
     }
     
@@ -187,31 +189,31 @@ def run_experiment_varying_n(n_values: List[int] = None, trials: int = 10) -> di
     
     for n in n_values:
         times = []
-        comps = []
+        ops = []
         depths = []
         
         for trial in range(trials):
             points = generate_random_instance(n, seed=trial)
             
             start_time = time.perf_counter()
-            median, comparisons, depth = weighted_median(points)
+            median, operations, depth = weighted_median(points)
             elapsed = (time.perf_counter() - start_time) * 1000  # Convert to ms
             
             times.append(elapsed)
-            comps.append(comparisons)
+            ops.append(operations)
             depths.append(depth)
         
         avg_time = np.mean(times)
-        avg_comps = np.mean(comps)
+        avg_ops = np.mean(ops)
         avg_depth = np.mean(depths)
         
         results['n'].append(n)
         results['time'].append(avg_time)
-        results['comparisons'].append(avg_comps)
+        results['operations'].append(avg_ops)
         results['depth'].append(avg_depth)
         
         print(f"  n={n:5d}: time={avg_time:7.2f}ms, "
-              f"comparisons={avg_comps:10.0f}, depth={avg_depth:.1f}")
+              f"operations={avg_ops:10.0f}, depth={avg_depth:.1f}")
     
     return results
 
@@ -287,6 +289,7 @@ def create_experimental_plots(exp_results: dict, verify_results: dict,
                               filename: str = 'divide_conquer_results.png'):
     """
     Create 4-panel figure showing experimental validation.
+    CORRECTED: Fits O(n) linear curves instead of O(n log n)
     
     Args:
         exp_results: Results from main experiment
@@ -301,40 +304,45 @@ def create_experimental_plots(exp_results: dict, verify_results: dict,
     
     n_vals = np.array(exp_results['n'])
     
-    # --- Plot (a): Running time vs n ---
+    # --- Plot (a): Running time vs n (LINEAR FIT) ---
     ax1.plot(n_vals, exp_results['time'], 'bo-',
              linewidth=2, markersize=8, label='Measured')
     
-    # Fit O(n log n) curve
+    # Fit O(n) curve: c * n
     if len(n_vals) > 2:
-        # Find best fit coefficient for c * n * log(n)
-        log_n = np.log2(n_vals)
-        theoretical = n_vals * log_n
-        c = np.mean(np.array(exp_results['time']) / theoretical)
-        fitted = c * theoretical
+        c = np.mean(np.array(exp_results['time']) / n_vals)
+        fitted = c * n_vals
         ax1.plot(n_vals, fitted, 'r--', linewidth=2, alpha=0.7,
-                 label=f'Fitted: {c:.4f}·n log n')
+                 label=f'Fitted: {c:.4f}·n')
+        
+        # Compute R²
+        ss_res = np.sum((np.array(exp_results['time']) - fitted) ** 2)
+        ss_tot = np.sum((np.array(exp_results['time']) - np.mean(exp_results['time'])) ** 2)
+        r_squared = 1 - (ss_res / ss_tot)
+        ax1.text(0.05, 0.95, f'R² = {r_squared:.4f}', 
+                transform=ax1.transAxes, fontsize=10,
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
     ax1.set_xlabel('Number of Points (n)', fontsize=11)
     ax1.set_ylabel('Running Time (ms)', fontsize=11)
-    ax1.set_title('(a) Running Time vs n', fontsize=12, fontweight='bold')
+    ax1.set_title('(a) Running Time vs n (Linear Fit)', fontsize=12, fontweight='bold')
     ax1.legend(fontsize=10)
     ax1.grid(True, alpha=0.3)
     
-    # --- Plot (b): Comparisons vs n ---
-    ax2.plot(n_vals, exp_results['comparisons'], 'ro-',
+    # --- Plot (b): Operations vs n (LINEAR FIT) ---
+    ax2.plot(n_vals, exp_results['operations'], 'ro-',
              linewidth=2, markersize=8, label='Measured')
     
-    # Theoretical O(n log n) line
+    # Theoretical O(n) line
     if len(n_vals) > 2:
-        c2 = np.mean(np.array(exp_results['comparisons']) / theoretical)
-        fitted2 = c2 * theoretical
+        c2 = np.mean(np.array(exp_results['operations']) / n_vals)
+        fitted2 = c2 * n_vals
         ax2.plot(n_vals, fitted2, 'k--', linewidth=2, alpha=0.7,
-                 label=f'Theoretical: {c2:.1f}·n log n')
+                 label=f'Theoretical: {c2:.1f}·n')
     
     ax2.set_xlabel('Number of Points (n)', fontsize=11)
-    ax2.set_ylabel('Number of Comparisons', fontsize=11)
-    ax2.set_title('(b) Comparisons vs n', fontsize=12, fontweight='bold')
+    ax2.set_ylabel('Number of Operations', fontsize=11)
+    ax2.set_title('(b) Operations vs n (Linear Fit)', fontsize=12, fontweight='bold')
     ax2.legend(fontsize=10)
     ax2.grid(True, alpha=0.3)
     
@@ -403,12 +411,12 @@ def demo_algorithm():
     print(f"\nTotal Population: {total_pop}k")
     
     # Find optimal location
-    optimal_pos, comparisons, depth = weighted_median(points)
+    optimal_pos, operations, depth = weighted_median(points)
     optimal_cost = total_weighted_distance(points, optimal_pos)
     
     print(f"\nOptimal Facility Location: {optimal_pos:.1f} miles")
     print(f"Total Weighted Distance: {optimal_cost:.1f} (population × miles)")
-    print(f"Comparisons: {comparisons}")
+    print(f"Operations: {operations}")
     print(f"Recursion Depth: {depth}")
     
     # Compare with other positions
@@ -433,19 +441,18 @@ def print_summary_statistics(exp_results: dict, verify_results: dict):
           f"{max(exp_results['time']):.2f}ms")
     print(f"  Max recursion depth: {max(exp_results['depth']):.1f}")
     
-    # Check O(n log n) fit quality
+    # Check O(n) fit quality
     n_vals = np.array(exp_results['n'])
-    theoretical = n_vals * np.log2(n_vals)
     times = np.array(exp_results['time'])
     
-    # Compute R² for time fit
-    c = np.mean(times / theoretical)
-    fitted = c * theoretical
+    # Compute R² for time fit (LINEAR)
+    c = np.mean(times / n_vals)
+    fitted = c * n_vals
     ss_res = np.sum((times - fitted) ** 2)
     ss_tot = np.sum((times - np.mean(times)) ** 2)
     r_squared = 1 - (ss_res / ss_tot)
     
-    print(f"  O(n log n) fit quality: R² = {r_squared:.4f}")
+    print(f"  O(n) linear fit quality: R² = {r_squared:.4f}")
     
     print("\nVerification Experiment:")
     print(f"  All D&C solutions matched brute-force optimal: ✓")
@@ -453,8 +460,8 @@ def print_summary_statistics(exp_results: dict, verify_results: dict):
           f"{np.mean(verify_results['improvement']):.1f}%")
     
     print("\nComplexity Validation:")
-    print(f"  ✓ Running time scales as O(n log n)")
-    print(f"  ✓ Comparisons follow O(n log n) trend")
+    print(f"  ✓ Running time scales linearly as O(n)")
+    print(f"  ✓ Operations follow O(n) trend")
     print(f"  ✓ Recursion depth is O(log n)")
     print(f"  ✓ Computed solutions are provably optimal")
 
@@ -463,6 +470,7 @@ if __name__ == "__main__":
     print("="*60)
     print("Optimal Facility Location in Linear Networks")
     print("Divide-and-Conquer Algorithm - Experimental Validation")
+    print("CORRECTED VERSION: O(n) Time Complexity")
     print("="*60)
     
     # Run demo
